@@ -1,0 +1,1 @@
+data: id => ({ status: 'ok', data: DATA[id] }),
