@@ -437,7 +437,7 @@
       <p class="note">IP, OPD and HEMO claims counted by submission date.</p>
       <div class="cal-controls">
         <button type="button" id="cal-prev" aria-label="Previous month">← Previous</button>
-        <div class="cal-title" id="cal-month-title">September 2026</div>
+        <div class="cal-title" id="cal-month-title"></div>
         <button type="button" id="cal-next" aria-label="Next month">Next →</button>
       </div>
       <div class="cal-legend">
@@ -462,9 +462,9 @@
         <div class="chart dash-skeleton" id="ch-pd" data-source="monthly"></div>
       </div>
       <div class="card">
-        <h2 id="c-sep">Daily submissions, September 2026</h2>
-        <p class="note">Claims submitted on each day of the month.</p>
-        <div class="chart dash-skeleton" id="ch-sep" data-source="sept"></div>
+        <h2 id="c-sep">Daily submissions</h2>
+        <p class="note" id="c-sep-note">Claims submitted on each day of the current month.</p>
+        <div class="chart dash-skeleton" id="ch-sep" data-source="daily"></div>
       </div>
       <div class="card">
         <h2 id="c-delay">Average submission delay</h2>
@@ -494,7 +494,7 @@
   </script>
   <script>// External data is loaded from a Google Apps Script Web App URL.
 // The endpoint should return JSON with: summary, status, monthly, buckets, sept, and daily.
-    const GOOGLE_SHEETS_JSON_URL = 'https://script.google.com/macros/s/AKfycbzasOZPt1TDvonG_xqCPVbcwZ_mCQpY5cbX4bgOPM0m6bBAKRoX5bVEmowhDZdI6J75mQ/exec';
+    const GOOGLE_SHEETS_JSON_URL = 'https://script.google.com/macros/s/AKfycby9AnjTWdFX5HQY3clC5snsJ_M6XKdnFwMP58BSIVpHYlohcRcRu8ca-AbD3yq3WOdJGg/exec';
     let DATA = { summary: [], status: [], monthly: [], buckets: [], sept: [], daily: [] };
     let DATA_STATUS = 'loading';;
     const dash = {
@@ -573,7 +573,8 @@
       el.appendChild(svg.node());
     }
 
-    const calState = { year: 2026, month: 8 };
+    const calNow = new Date();
+    const calState = { year: calNow.getFullYear(), month: calNow.getMonth() };
     function renderSubmissionCalendar() {
       const rootCal = document.getElementById('submission-calendar');
       const title = document.getElementById('cal-month-title');
@@ -687,6 +688,53 @@
         cleanup();
       }
     }
+    function renderCurrentMonthDailyChart() {
+      const chart = document.getElementById('ch-sep');
+      const heading = document.getElementById('c-sep');
+      const note = document.getElementById('c-sep-note');
+      if (!chart || !heading || !note) return;
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const monthName = new Date(Date.UTC(year, month, 1)).toLocaleDateString('en-US', {
+        month: 'long', year: 'numeric', timeZone: 'UTC'
+      });
+      heading.textContent = 'Daily submissions, ' + monthName;
+      note.textContent = 'Claims submitted on each day of ' + monthName + '.';
+      chart.dataset.day = '1';
+
+      const daily = Array.isArray(DATA.daily) && DATA.daily.length ? DATA.daily : [];
+      const monthKey = year + '-' + String(month + 1).padStart(2, '0');
+      const monthRows = daily.filter(r => String(r.day || '').slice(0, 7) === monthKey);
+      if (DATA_STATUS !== 'ok') { state(chart, 'daily'); return; }
+      if (!monthRows.length) {
+        chart.classList.remove('dash-skeleton');
+        chart.replaceChildren();
+        const message = document.createElement('div');
+        message.className = 'fail';
+        message.textContent = 'No daily submission data returned for ' + monthName + '.';
+        chart.appendChild(message);
+        return;
+      }
+
+      const totals = new Map();
+      monthRows.forEach(r => {
+        const day = String(r.day || '').slice(0, 10);
+        const type = String(r.type || '').toUpperCase();
+        if (!day || !TYPES.includes(type)) return;
+        if (!totals.has(day)) totals.set(day, { IP: 0, OPD: 0, HEMO: 0 });
+        totals.get(day)[type] += Number(r.claims) || 0;
+      });
+      const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+      const rows = [];
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateKey = monthKey + '-' + String(day).padStart(2, '0');
+        const counts = totals.get(dateKey) || { IP: 0, OPD: 0, HEMO: 0 };
+        TYPES.forEach(type => rows.push({ day: dateKey, x: dateKey, type, claims: counts[type] }));
+      }
+      lineChart(chart, 'daily', rows, { y: 'claims', fmt: fN });
+    }
+
     dash.onData(() => {
       setLegend();
       root.querySelectorAll('.kpi [data-field]').forEach(e => { const s = dash.data('summary'); if (s.status !== 'ok') return; const [k, v] = e.dataset.where.split('='); const r = s.data.find(x => x[k] === v); if (!r) return; const raw = r[e.dataset.field]; e.textContent = e.dataset.field === 'claims' ? fN(+raw) : String(+raw) });
@@ -698,8 +746,7 @@
         lineChart(document.getElementById('ch-pd'), 'monthly', rows, { y: 'per_day' });
         lineChart(document.getElementById('ch-delay'), 'monthly', rows, { y: 'avg_delay', ref: 60, ymax: 120, fmt: f1, unit: ' d' });
       } else { ['ch-vol', 'ch-pd', 'ch-delay'].forEach(i => state(document.getElementById(i), 'monthly')) }
-      const se = ok('sept'); const sel = document.getElementById('ch-sep'); sel.dataset.day = '1';
-      if (se) lineChart(sel, 'sept', se.map(r => ({ ...r, x: r.day })), { y: 'claims', fmt: fN }); else state(sel, 'sept');
+      renderCurrentMonthDailyChart();
       const bk = ok('buckets'); if (bk) bucketChart(document.getElementById('ch-bkt'), bk); else state(document.getElementById('ch-bkt'), 'buckets');
       const st = ok('status'); if (st) statusChart(document.getElementById('ch-st'), st); else state(document.getElementById('ch-st'), 'status');
     });
