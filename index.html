@@ -494,7 +494,7 @@
   </script>
   <script>// External data is loaded from a Google Apps Script Web App URL.
 // The endpoint should return JSON with: summary, status, monthly, buckets, sept, and daily.
-    const GOOGLE_SHEETS_JSON_URL = 'https://script.google.com/macros/s/AKfycby9AnjTWdFX5HQY3clC5snsJ_M6XKdnFwMP58BSIVpHYlohcRcRu8ca-AbD3yq3WOdJGg/exec';
+    const GOOGLE_SHEETS_JSON_URL = 'https://script.google.com/macros/s/AKfycbzasOZPt1TDvonG_xqCPVbcwZ_mCQpY5cbX4bgOPM0m6bBAKRoX5bVEmowhDZdI6J75mQ/exec';
     let DATA = { summary: [], status: [], monthly: [], buckets: [], sept: [], daily: [] };
     let DATA_STATUS = 'loading';;
     const dash = {
@@ -654,7 +654,7 @@
         const incoming = await new Promise((resolve, reject) => {
           window[callbackName] = data => resolve(data);
           script.onerror = () => reject(new Error('Could not reach the Google Apps Script endpoint.'));
-          timeoutId = setTimeout(() => reject(new Error('Timed out waiting for Google Apps Script.')), 20000);
+          timeoutId = setTimeout(() => reject(new Error('Timed out waiting for Google Apps Script.')), 120000);
           script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + encodeURIComponent(callbackName) + '&_=' + Date.now();
           document.head.appendChild(script);
         });
