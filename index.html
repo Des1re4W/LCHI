@@ -66,6 +66,48 @@
     }
 
     .dash-skeleton {}
+    /* Google Sheets connection / loading status */
+    .data-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      margin-top: 14px;
+      padding: 8px 12px;
+      border: 1px solid var(--color-border-line);
+      border-radius: 999px;
+      background: var(--color-panel);
+      color: var(--color-fg-muted);
+      font: 500 12px/1.3 var(--font-anthropic-sans);
+    }
+    .data-status .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #a0a6b2;
+      flex: 0 0 auto;
+    }
+    .data-status.loading .status-dot {
+      background: #d99a16;
+      animation: status-pulse 1.1s ease-in-out infinite;
+    }
+    .data-status.loaded .status-dot { background: #1baf7a; }
+    .data-status.error .status-dot { background: var(--color-bad); }
+    .data-status .status-spinner {
+      display: none;
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--color-border-line);
+      border-top-color: #d99a16;
+      border-radius: 50%;
+      animation: status-spin .75s linear infinite;
+      flex: 0 0 auto;
+    }
+    .data-status.loading .status-spinner { display: inline-block; }
+    @keyframes status-spin { to { transform: rotate(360deg); } }
+    @keyframes status-pulse { 50% { opacity: .45; } }
+    @media (prefers-reduced-motion: reduce) {
+      .data-status .status-spinner, .data-status.loading .status-dot { animation: none; }
+    }
   </style>
   <style>
     .eb {
@@ -387,6 +429,11 @@
   <div class="eb" id="eb">
     <header>
       <h1 id="title">Eurolink claims submission</h1>
+      <div id="data-status" class="data-status loading" role="status" aria-live="polite">
+        <span class="status-spinner" aria-hidden="true"></span>
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="data-status-text">Loading claims data from Google Sheets…</span>
+      </div>
       <p class="sub">Inpatient (IP), outpatient (OPD) and hemodialysis (HEMO) claims. Delay is the number of days from
         discharge to the date the claim was submitted. The filing window is 60 days.</p>
       <div class="legend"><span><i style="background:var(--lg0)"></i>IP</span><span><i
@@ -633,12 +680,24 @@
     });
     renderSubmissionCalendar();
 
+    function updateDataStatus(status, message) {
+      const badge = document.getElementById('data-status');
+      const label = document.getElementById('data-status-text');
+      if (!badge || !label) return;
+      badge.classList.remove('loading', 'loaded', 'error');
+      badge.classList.add(status);
+      label.textContent = message;
+    }
+
     async function loadExternalData() {
+      updateDataStatus('loading', 'Loading claims data from Google Sheets…');
       const url = GOOGLE_SHEETS_JSON_URL.trim();
       if (!url || url.includes('PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE')) {
         DATA_STATUS = 'error';
+        updateDataStatus('error', 'Not connected — Google Sheets URL is missing');
         document.getElementById('calendar-note').textContent =
           'Google Sheets is not connected yet. Add your published Google Apps Script Web App URL to GOOGLE_SHEETS_JSON_URL in this file.';
+        window.dispatchEvent(new Event('resize'));
         return;
       }
       const callbackName = '__eurolinkSheetCallback_' + Date.now();
@@ -673,6 +732,7 @@
           throw new Error('The endpoint loaded but returned empty dashboard data. Check the sheet header row and IPD/OPD/HEMO values.');
         }
         DATA_STATUS = 'ok';
+        updateDataStatus('loaded', 'Data loaded successfully');
         document.getElementById('calendar-note').textContent = incoming.sourceSheet
           ? 'Data loaded from sheet: ' + incoming.sourceSheet + ' (' + (incoming.rowCount || 0) + ' rows).'
           : 'Google Sheets data loaded.';
@@ -680,6 +740,7 @@
         window.dispatchEvent(new Event('resize'));
       } catch (error) {
         DATA_STATUS = 'error';
+        updateDataStatus('error', 'Failed to load claims data');
         document.getElementById('calendar-note').textContent =
           'Could not load Google Sheets data: ' + (error && error.message ? error.message : String(error));
         window.dispatchEvent(new Event('resize'));
