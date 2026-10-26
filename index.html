@@ -692,7 +692,11 @@
     async function loadExternalData() {
       updateDataStatus('loading', 'Loading claims data from Google Sheets…');
       const url = GOOGLE_SHEETS_JSON_URL.trim();
-      if (!url || url.includes('google')) {
+      if (
+        !url ||
+        !url.startsWith('https://script.google.com/macros/s/') ||
+        !url.includes('/exec')
+      ) {
         DATA_STATUS = 'error';
         updateDataStatus('error', 'Not connected — Google Sheets URL is missing');
         document.getElementById('calendar-note').textContent =
